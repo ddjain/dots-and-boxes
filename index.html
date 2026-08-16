@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dots &amp; Boxes</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="app">
+  <header class="app-header">
+    <div class="title-block">
+      <h1>Dots <span class="amp">&amp;</span> Boxes</h1>
+      <p class="tagline">Draw smart. Complete boxes. Take extra turns. Win the game.</p>
+    </div>
+    <button class="sound-toggle" id="soundToggle" type="button" aria-label="Toggle sound">🔊</button>
+  </header>
+
+  <div class="game-layout" id="gameLayout" hidden>
+    <aside class="sidebar">
+      <div class="turn-card">
+        <span class="turn-label">Current Turn</span>
+        <span class="turn-chip" id="turnChip"></span>
+        <span class="status" id="statusText"></span>
+        <div class="turn-timer" id="turnTimer" hidden>
+          <span class="timer-bar"><span class="timer-fill" id="timerFill"></span></span>
+          <span class="timer-text" id="timerText">10s</span>
+        </div>
+      </div>
+      <div class="score-panel">
+        <h2 class="panel-title">Scores</h2>
+        <ul class="score-list" id="scoreList"></ul>
+      </div>
+      <button class="btn-ghost" id="newGameBtn" type="button">New Game</button>
+    </aside>
+    <section class="board-area">
+      <svg id="board" class="board" role="img" aria-label="Dots and Boxes game board"></svg>
+    </section>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <div class="overlay" id="setupOverlay">
+    <div class="setup-card">
+      <h2>Dots <span class="amp">&amp;</span> Boxes</h2>
+
+      <div class="mode-tabs" role="tablist">
+        <button type="button" class="mode-tab active" data-mode="local" role="tab">Local</button>
+        <button type="button" class="mode-tab" data-mode="host" role="tab">Create Room</button>
+        <button type="button" class="mode-tab" data-mode="join" role="tab">Join Room</button>
+      </div>
+
+      <div class="mode-pane" id="pane-local" role="tabpanel">
+        <div class="field-row">
+          <div class="field">
+            <label for="gridSizeLocal">Grid size</label>
+            <select id="gridSizeLocal">
+              <option value="4">4 × 4</option>
+              <option value="5" selected>5 × 5</option>
+              <option value="6">6 × 6</option>
+              <option value="7">7 × 7</option>
+              <option value="8">8 × 8</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="playerCountLocal">Players</label>
+            <select id="playerCountLocal">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="turnTimeLocal">Turn time</label>
+            <select id="turnTimeLocal">
+              <option value="0">No limit</option>
+              <option value="5">5 sec</option>
+              <option value="10" selected>10 sec</option>
+              <option value="15">15 sec</option>
+              <option value="30">30 sec</option>
+              <option value="60">60 sec</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Player names</label>
+          <div id="playerNamesLocal" class="player-names"></div>
+        </div>
+        <button class="btn-primary" id="startLocalBtn" type="button">Start Game</button>
+      </div>
+
+      <div class="mode-pane" id="pane-host" role="tabpanel" hidden>
+        <div class="field-row">
+          <div class="field">
+            <label for="gridSizeHost">Grid size</label>
+            <select id="gridSizeHost">
+              <option value="4">4 × 4</option>
+              <option value="5" selected>5 × 5</option>
+              <option value="6">6 × 6</option>
+              <option value="7">7 × 7</option>
+              <option value="8">8 × 8</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="playerCountHost">Players allowed</label>
+            <select id="playerCountHost">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="turnTimeHost">Turn time</label>
+            <select id="turnTimeHost">
+              <option value="0">No limit</option>
+              <option value="5">5 sec</option>
+              <option value="10" selected>10 sec</option>
+              <option value="15">15 sec</option>
+              <option value="30">30 sec</option>
+              <option value="60">60 sec</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="hostName">Your name</label>
+          <input type="text" id="hostName" maxlength="14" placeholder="Host">
+        </div>
+        <button class="btn-primary" id="createRoomBtn" type="button">Create Room</button>
+
+        <div class="net-status" id="hostStatus" hidden>
+          <p class="net-label">Share this room code</p>
+          <div class="room-code" id="roomCodeText"></div>
+          <button class="btn-primary btn-copy" id="copyLinkBtn" type="button">Copy Share Link</button>
+          <p class="waiting" id="waitingText"></p>
+          <ul class="lobby-list" id="lobbyList"></ul>
+          <button class="btn-ghost" id="cancelHostBtn" type="button">Cancel Room</button>
+        </div>
+      </div>
+
+      <div class="mode-pane" id="pane-join" role="tabpanel" hidden>
+        <div class="field">
+          <label for="joinCode">Room code</label>
+          <input type="text" id="joinCode" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="6-digit code">
+        </div>
+        <div class="field">
+          <label for="joinName">Your name</label>
+          <input type="text" id="joinName" maxlength="14" placeholder="Player">
+        </div>
+        <button class="btn-primary" id="joinRoomBtn" type="button">Join Room</button>
+        <div class="net-status" id="joinStatus" hidden></div>
+        <button class="btn-ghost" id="cancelJoinBtn" type="button" hidden>Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="resultOverlay" hidden>
+    <div class="result-card">
+      <h2 id="resultTitle">Player wins!</h2>
+      <ul id="resultDetails" class="result-list"></ul>
+      <div class="result-actions">
+        <button class="btn-primary" id="playAgainBtn" type="button">Play Again</button>
+        <button class="btn-ghost" id="resultCloseBtn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
