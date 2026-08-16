@@ -151,39 +151,6 @@ body {
   animation: flash 0.9s ease;
 }
 
-.turn-timer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.timer-bar {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--panel-2);
-  overflow: hidden;
-}
-
-.timer-fill {
-  display: block;
-  height: 100%;
-  width: 100%;
-  border-radius: 3px;
-  background: var(--accent);
-  transition: width 0.12s linear, background 0.4s ease;
-}
-
-.timer-text {
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
-  min-width: 36px;
-  text-align: right;
-}
-
 @keyframes flash {
   0% {
     opacity: 0;

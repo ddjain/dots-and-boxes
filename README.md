@@ -19,10 +19,9 @@ A turn-based multiplayer strategy game built with vanilla HTML, CSS, and JavaScr
 
 - **Local play** — 2–4 players on one screen
 - **Online multiplayer** — host a room and share a 6-digit code or a direct join link; up to 4 players take turns one-by-one
-  - Create Room with grid size, player count, and turn-time settings
+  - Create Room with grid size and player-count settings
   - Live lobby showing who has joined
   - Copy a share link like `https://host/?type=join&code=123456` for one-click joining
-- **Turn timer** — configurable (No limit / 5 / 10 / 15 / 30 / 60 seconds); turns are skipped automatically when time runs out
 - **Live scoreboard** with the current player's turn highlighted
 - **Sound effects** — move, error, win, and player-left sounds with a mute toggle
 - **Player leave notifications** — everyone is notified when someone leaves the room
@@ -46,7 +45,7 @@ A turn-based multiplayer strategy game built with vanilla HTML, CSS, and JavaScr
     ├── renderer.js     # SVG board rendering and click handling
     ├── network.js      # PeerJS room host/client with move relaying
     ├── sound.js        # Web Audio sound effects
-    └── main.js         # App wiring, UI, timers, toasts
+    └── main.js         # App wiring, UI, toasts
 ```
 
 ## Run Locally

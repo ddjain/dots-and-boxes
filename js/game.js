@@ -30,13 +30,6 @@ export class Game {
     return this.lastMove;
   }
 
-  skipTurn() {
-    if (this.isOver) return null;
-    this.currentIndex = (this.currentIndex + 1) % this.players.length;
-    this.lastMove = { skipped: true };
-    return this.lastMove;
-  }
-
   scores() {
     const scores = new Array(this.players.length).fill(0);
     for (const owner of this.board.boxOwners.values()) {

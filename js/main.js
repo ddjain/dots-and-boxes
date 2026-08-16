@@ -15,9 +15,6 @@ const els = {
   scoreList: $("#scoreList"),
   turnChip: $("#turnChip"),
   statusText: $("#statusText"),
-  turnTimer: $("#turnTimer"),
-  timerFill: $("#timerFill"),
-  timerText: $("#timerText"),
   newGameBtn: $("#newGameBtn"),
   toastContainer: $("#toastContainer"),
   soundToggle: $("#soundToggle"),
@@ -35,13 +32,11 @@ const els = {
 
   gridSizeLocal: $("#gridSizeLocal"),
   playerCountLocal: $("#playerCountLocal"),
-  turnTimeLocal: $("#turnTimeLocal"),
   playerNamesLocal: $("#playerNamesLocal"),
   startLocalBtn: $("#startLocalBtn"),
 
   gridSizeHost: $("#gridSizeHost"),
   playerCountHost: $("#playerCountHost"),
-  turnTimeHost: $("#turnTimeHost"),
   hostName: $("#hostName"),
   createRoomBtn: $("#createRoomBtn"),
   hostStatus: $("#hostStatus"),
@@ -65,10 +60,6 @@ let myIndex = 0;
 let host = null;
 let client = null;
 let joinedNames = [];
-let turnSeconds = 10;
-let timerId = null;
-let remainingMs = 0;
-let lastTick = 0;
 
 function buildPlayerInputs() {
   const count = Number(els.playerCountLocal.value);
@@ -120,7 +111,6 @@ function teardownNetwork() {
 
 function showSetup() {
   teardownNetwork();
-  clearTurnTimer();
   game = null;
   renderer = null;
   els.resultOverlay.hidden = true;
@@ -129,10 +119,9 @@ function showSetup() {
   setMode("local");
 }
 
-function startGame(size, players, myIdx, netMode, time) {
+function startGame(size, players, myIdx, netMode) {
   mode = netMode;
   myIndex = myIdx;
-  turnSeconds = Math.max(0, Number(time) || 0);
   game = new Game(new Board(size, size), players);
   renderer = new Renderer(els.board, game.board, players);
   renderer.onEdgeClick = onEdgeClick;
@@ -140,7 +129,6 @@ function startGame(size, players, myIdx, netMode, time) {
   els.resultOverlay.hidden = true;
   els.gameLayout.hidden = false;
   updateUI();
-  startTurnTimer();
 }
 
 function startLocalGame() {
@@ -151,7 +139,7 @@ function startLocalGame() {
     color: CONFIG.playerTemplates[i].color,
     symbol: CONFIG.playerTemplates[i].symbol,
   }));
-  startGame(size, players, 0, "local", els.turnTimeLocal.value);
+  startGame(size, players, 0, "local");
 }
 
 function onEdgeClick(r, c, dir) {
@@ -191,64 +179,7 @@ function applyMove(r, c, dir) {
   game.applyMove(r, c, dir);
   renderer.redraw();
   updateUI(game.lastMove);
-  startTurnTimer();
   sound.playMove();
-}
-
-function startTurnTimer() {
-  clearTurnTimer();
-  els.turnTimer.hidden = !game || game.isOver || !turnSeconds;
-  if (!game || game.isOver || !turnSeconds) return;
-  remainingMs = turnSeconds * 1000;
-  lastTick = performance.now();
-  updateTimerDisplay(1);
-  timerId = setInterval(() => {
-    const now = performance.now();
-    remainingMs -= now - lastTick;
-    lastTick = now;
-    updateTimerDisplay(Math.max(0, remainingMs) / (turnSeconds * 1000));
-    if (remainingMs <= 0) {
-      clearTurnTimer();
-      onTurnTimeout();
-    }
-  }, 100);
-}
-
-function clearTurnTimer() {
-  if (timerId) clearInterval(timerId);
-  timerId = null;
-}
-
-function updateTimerDisplay(fraction) {
-  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-  els.timerText.textContent = `${seconds}s`;
-  const clamped = Math.min(1, Math.max(0, fraction));
-  els.timerFill.style.width = `${clamped * 100}%`;
-  els.timerFill.style.background =
-    clamped > 0.5 ? "var(--accent)" : clamped > 0.25 ? "#ffb020" : "#ff4d4d";
-}
-
-function onTurnTimeout() {
-  if (!game || game.isOver) return;
-  if (mode === "join") {
-    els.statusText.textContent = "Time's up — waiting for the host…";
-    return;
-  }
-  const skipped = game.currentPlayer.name;
-  game.skipTurn();
-  if (mode === "host") host.broadcastSkip();
-  updateUI(game.lastMove);
-  startTurnTimer();
-  showToast(`${skipped} ran out of time — turn skipped.`, "info");
-}
-
-function onSkip() {
-  if (!game || game.isOver) return;
-  const skipped = game.currentPlayer.name;
-  game.skipTurn();
-  updateUI(game.lastMove);
-  startTurnTimer();
-  showToast(`${skipped} ran out of time — turn skipped.`, "info");
 }
 
 function renderScores() {
@@ -287,7 +218,6 @@ function updateUI(lastMove) {
   renderer.setPlayerColor(isYourTurn ? game.currentIndex : null);
 
   if (game.isOver) {
-    clearTurnTimer();
     els.turnChip.textContent = "Game Over";
     els.turnChip.style.color = "var(--muted)";
     els.turnChip.style.borderColor = "var(--border)";
@@ -379,7 +309,6 @@ function startHostRoom() {
   const size = Number(els.gridSizeHost.value);
   const playerCount = Number(els.playerCountHost.value);
   const hostNameValue = els.hostName.value.trim() || "Host";
-  const turnTimeHost = els.turnTimeHost.value;
 
   els.hostStatus.hidden = false;
   els.waitingText.classList.remove("error");
@@ -407,7 +336,7 @@ function startHostRoom() {
       });
       els.waitingText.textContent = `Waiting for players (${count + 1}/${playerCount})`;
       if (!game && count + 1 >= playerCount) {
-        startHostGame(size, playerCount, hostNameValue, turnTimeHost);
+        startHostGame(size, playerCount, hostNameValue);
       }
     },
     onMove: (senderIndex, r, c, dir) => {
@@ -424,7 +353,7 @@ function startHostRoom() {
   });
 }
 
-function startHostGame(size, playerCount, hostNameValue, turnTime) {
+function startHostGame(size, playerCount, hostNameValue) {
   const players = [
     {
       name: hostNameValue,
@@ -439,8 +368,8 @@ function startHostGame(size, playerCount, hostNameValue, turnTime) {
       symbol: CONFIG.playerTemplates[i + 1].symbol,
     });
   }
-  host.start(players, size, turnTime);
-  startGame(size, players, 0, "host", turnTime);
+  host.start(players, size);
+  startGame(size, players, 0, "host");
 }
 
 function joinRoom() {
@@ -465,10 +394,9 @@ function joinRoom() {
     code,
     name,
     onStarted: (data) => {
-      startGame(data.size, data.players, data.you, "join", data.time);
+      startGame(data.size, data.players, data.you, "join");
     },
     onMove: (r, c, dir) => applyMove(r, c, dir),
-    onSkip,
     onNotice: (message) => {
       sound.playLeave();
       showToast(message, "leave");

@@ -89,10 +89,10 @@ export class RoomHost {
     return -1;
   }
 
-  start(players, size, time) {
+  start(players, size) {
     this.started = true;
     for (const [index, conn] of this.conns) {
-      conn.send({ t: "start", you: index, players, size, time });
+      conn.send({ t: "start", you: index, players, size });
     }
   }
 
@@ -104,10 +104,6 @@ export class RoomHost {
 
   broadcastMove(r, c, dir) {
     this.broadcast({ t: "move", r, c, dir });
-  }
-
-  broadcastSkip() {
-    this.broadcast({ t: "skip" });
   }
 
   destroy() {
@@ -124,21 +120,11 @@ export class RoomHost {
 }
 
 export class RoomClient {
-  constructor({
-    code,
-    name,
-    onStarted,
-    onMove,
-    onSkip,
-    onNotice,
-    onHostLeft,
-    onError,
-  }) {
+  constructor({ code, name, onStarted, onMove, onNotice, onHostLeft, onError }) {
     this.code = code;
     this.name = name;
     this.onStarted = onStarted;
     this.onMove = onMove;
-    this.onSkip = onSkip;
     this.onNotice = onNotice;
     this.onHostLeft = onHostLeft;
     this.onError = onError;
@@ -162,7 +148,6 @@ export class RoomClient {
       if (!data) return;
       if (data.t === "start") this.onStarted(data);
       else if (data.t === "move") this.onMove(data.r, data.c, data.dir);
-      else if (data.t === "skip") this.onSkip?.();
       else if (data.t === "notice") this.onNotice?.(data.message);
       else if (data.t === "full") {
         if (!this.closed) this.onError?.(new Error("Room is already in a game."));
