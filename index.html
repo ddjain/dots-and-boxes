@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dots &amp; Boxes</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LP9SCYP33N"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-LP9SCYP33N');
+</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -17,6 +25,7 @@
   </header>
 
   <div class="game-layout" id="gameLayout" hidden>
+    <div class="game-timer" id="gameTimer" aria-label="Elapsed time">00:00</div>
     <aside class="sidebar">
       <div class="turn-card">
         <span class="turn-label">Current Turn</span>

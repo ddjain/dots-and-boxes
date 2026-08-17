@@ -13,6 +13,7 @@ const els = {
   setupOverlay: $("#setupOverlay"),
   resultOverlay: $("#resultOverlay"),
   board: $("#board"),
+  gameTimer: $("#gameTimer"),
   scoreList: $("#scoreList"),
   turnChip: $("#turnChip"),
   statusText: $("#statusText"),
@@ -70,6 +71,8 @@ let host = null;
 let client = null;
 let lobby = null;
 let joinedNames = [];
+let timerHandle = null;
+let timerStart = 0;
 
 function buildPlayerInputs() {
   const count = Number(els.playerCountLocal.value);
@@ -123,6 +126,7 @@ function teardownNetwork() {
 
 function showSetup() {
   teardownNetwork();
+  stopTimer();
   game = null;
   renderer = null;
   els.resultOverlay.hidden = true;
@@ -135,6 +139,8 @@ function startGame(size, players, myIdx, netMode) {
   mode = netMode;
   myIndex = myIdx;
   game = new Game(new Board(size, size), players);
+  track("game_start", { mode: netMode, size, player_count: players.length });
+  startTimer();
   renderer = new Renderer(els.board, game.board, players);
   renderer.onEdgeClick = onEdgeClick;
   els.setupOverlay.hidden = true;
@@ -142,6 +148,31 @@ function startGame(size, players, myIdx, netMode) {
   els.resultOverlay.hidden = true;
   els.gameLayout.hidden = false;
   updateUI();
+}
+
+function startTimer() {
+  stopTimer();
+  timerStart = Date.now();
+  els.gameTimer.textContent = "00:00";
+  timerHandle = setInterval(updateTimer, 500);
+}
+
+function stopTimer() {
+  if (timerHandle !== null) {
+    clearInterval(timerHandle);
+    timerHandle = null;
+  }
+}
+
+function updateTimer() {
+  const total = Math.floor((Date.now() - timerStart) / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  els.gameTimer.textContent =
+    h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function startLocalGame() {
@@ -198,6 +229,7 @@ function applyMove(r, c, dir) {
 function handlePlayerLeft(index, name) {
   if (!game || index < 0 || index >= game.players.length) return;
   game.markPlayerLeft(index);
+  track("player_left");
   renderer.redraw();
   updateUI();
   sound.playLeave();
@@ -253,6 +285,7 @@ function updateUI(lastMove) {
   renderer.setPlayerColor(isYourTurn ? game.currentIndex : null);
 
   if (game.isOver) {
+    stopTimer();
     els.turnChip.textContent = "Game Over";
     els.turnChip.style.color = "var(--muted)";
     els.turnChip.style.borderColor = "var(--border)";
@@ -303,6 +336,11 @@ function showResults() {
     .sort((a, b) => b.score - a.score);
 
   const winners = game.winnerIndexes;
+  track("game_completed", {
+    mode,
+    winner_count: winners.length,
+    player_count: game.players.length,
+  });
   if (winners.length === 1) {
     els.resultTitle.textContent = `🏆 ${game.players[winners[0]].name} wins!`;
   } else {
@@ -358,6 +396,7 @@ function startHostRoom() {
       els.roomCodeText.textContent = code;
       els.hostYouName.textContent = hostNameValue;
       renderQr(buildJoinLink(code));
+      track("room_created", { size, max_players: playerCount });
       els.waitingText.textContent = `Waiting for players (1/${playerCount})`;
       lobby?.publish({
         code,
@@ -492,7 +531,10 @@ function joinRoom() {
     onStarted: (data) => {
       startGame(data.size, data.players, data.you, "join");
     },
-    onJoined: (you, players, max) => showJoinWait(you, players, max),
+    onJoined: (you, players, max) => {
+      track("room_joined", { player_count: players.length, max_players: max });
+      showJoinWait(you, players, max);
+    },
     onPlayers: (players, max) => renderJoinWait(players, max),
     onMove: (r, c, dir) => applyMove(r, c, dir),
     onPlayerLeft: (index, name) => handlePlayerLeft(index, name),
@@ -623,6 +665,10 @@ function generateName() {
   const adjective = NAME_ADJECTIVES[Math.floor(Math.random() * NAME_ADJECTIVES.length)];
   const noun = NAME_NOUNS[Math.floor(Math.random() * NAME_NOUNS.length)];
   return `${adjective}_${noun}`;
+}
+
+function track(event, params) {
+  if (typeof gtag === "function") gtag("event", event, params || {});
 }
 
 function renderQr(text) {
