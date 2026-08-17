@@ -54,6 +54,10 @@ const els = {
   cancelJoinBtn: $("#cancelJoinBtn"),
   lobbyStatus: $("#lobbyStatus"),
   roomList: $("#roomList"),
+  joinWaitOverlay: $("#joinWaitOverlay"),
+  joinWaitStatus: $("#joinWaitStatus"),
+  joinWaitList: $("#joinWaitList"),
+  leaveJoinBtn: $("#leaveJoinBtn"),
 };
 
 let renderer = null;
@@ -105,6 +109,7 @@ function teardownNetwork() {
   client?.destroy();
   client = null;
   joinedNames = [];
+  els.joinWaitOverlay.hidden = true;
   els.createRoomBtn.disabled = false;
   els.joinRoomBtn.disabled = false;
   els.hostStatus.hidden = true;
@@ -131,6 +136,7 @@ function startGame(size, players, myIdx, netMode) {
   renderer = new Renderer(els.board, game.board, players);
   renderer.onEdgeClick = onEdgeClick;
   els.setupOverlay.hidden = true;
+  els.joinWaitOverlay.hidden = true;
   els.resultOverlay.hidden = true;
   els.gameLayout.hidden = false;
   updateUI();
@@ -392,6 +398,44 @@ function startHostGame(size, playerCount, hostNameValue) {
   startGame(size, players, 0, "host");
 }
 
+function showJoinWait(you, players, max) {
+  myIndex = you;
+  els.setupOverlay.hidden = true;
+  els.joinWaitOverlay.hidden = false;
+  renderJoinWait(players, max);
+}
+
+function renderJoinWait(players, max) {
+  const list = Array.isArray(players) ? players : [];
+  els.joinWaitList.innerHTML = "";
+  list.forEach((name, i) => {
+    const li = document.createElement("li");
+    li.className = "wait-player";
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background =
+      CONFIG.playerTemplates[i % CONFIG.playerTemplates.length].color;
+    li.appendChild(swatch);
+
+    const label = document.createElement("span");
+    label.textContent = name;
+    li.appendChild(label);
+
+    if (i === myIndex) {
+      const you = document.createElement("em");
+      you.className = "wait-you";
+      you.textContent = "(you)";
+      li.appendChild(you);
+    }
+    els.joinWaitList.appendChild(li);
+  });
+  const waiting = max - list.length;
+  els.joinWaitStatus.textContent =
+    waiting > 0
+      ? `Waiting for ${waiting} more player${waiting === 1 ? "" : "s"}…`
+      : "All players joined — starting…";
+}
+
 function joinRoom() {
   if (!window.Peer) {
     return showNetError(
@@ -416,6 +460,8 @@ function joinRoom() {
     onStarted: (data) => {
       startGame(data.size, data.players, data.you, "join");
     },
+    onJoined: (you, players, max) => showJoinWait(you, players, max),
+    onPlayers: (players, max) => renderJoinWait(players, max),
     onMove: (r, c, dir) => applyMove(r, c, dir),
     onNotice: (message) => {
       sound.playLeave();
@@ -432,6 +478,11 @@ function joinRoom() {
 
 function showNetError(err) {
   const message = describeError(err);
+  if (!els.joinWaitOverlay.hidden) {
+    showToast(message, "leave");
+    setTimeout(showSetup, 1500);
+    return;
+  }
   if (mode === "host") {
     els.waitingText.textContent = message;
     els.waitingText.classList.add("error");
@@ -591,6 +642,11 @@ els.cancelHostBtn.addEventListener("click", () => {
 });
 
 els.joinRoomBtn.addEventListener("click", joinRoom);
+els.leaveJoinBtn.addEventListener("click", () => {
+  client?.destroy();
+  client = null;
+  showSetup();
+});
 els.cancelJoinBtn.addEventListener("click", () => {
   client?.destroy();
   client = null;

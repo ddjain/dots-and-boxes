@@ -334,7 +334,8 @@ body {
 }
 
 .setup-card,
-.result-card {
+.result-card,
+.wait-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 22px;
@@ -344,7 +345,8 @@ body {
 }
 
 .setup-card h2,
-.result-card h2 {
+.result-card h2,
+.wait-card h2 {
   margin: 0 0 18px;
   font-size: 24px;
 }
@@ -446,6 +448,40 @@ body {
   border-top: 1px solid var(--border);
   padding-top: 16px;
   font-size: 14px;
+}
+
+.wait-status {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.wait-players {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wait-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wait-player .wait-you {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: auto;
 }
 
 .lobby-status {

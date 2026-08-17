@@ -5,12 +5,22 @@ function generateRoomCode() {
 }
 
 export class RoomHost {
-  constructor({ onReady, onLobbyUpdate, onMove, onDisconnect, onError }) {
+  constructor({
+    onReady,
+    onLobbyUpdate,
+    onMove,
+    onDisconnect,
+    onError,
+    maxPlayers = 2,
+    hostName = "Host",
+  }) {
     this.onReady = onReady;
     this.onLobbyUpdate = onLobbyUpdate;
     this.onMove = onMove;
     this.onDisconnect = onDisconnect;
     this.onError = onError;
+    this.maxPlayers = maxPlayers;
+    this.hostName = hostName;
     this.conns = new Map();
     this.names = new Map();
     this.attempts = 0;
@@ -52,14 +62,21 @@ export class RoomHost {
         setTimeout(() => conn.close(), 200);
         return;
       }
-      conn.send({ t: "welcome", you: this.conns.size + 1 });
     });
     conn.on("data", (data) => {
       if (!data || typeof data.t !== "string") return;
       if (data.t === "join") {
+        if (this.started) return;
         const index = this.conns.size + 1;
         this.conns.set(index, conn);
         this.names.set(index, (data.name || `Player ${index + 1}`).slice(0, 14));
+        conn.send({
+          t: "joined",
+          you: index,
+          players: this.playerList(),
+          max: this.maxPlayers,
+        });
+        this.broadcastPlayers();
         this.onLobbyUpdate(this.conns.size, [...this.names.values()]);
       } else if (data.t === "move") {
         const index = this.indexOf(conn);
@@ -73,6 +90,7 @@ export class RoomHost {
         this.conns.delete(index);
         this.names.delete(index);
         this.onLobbyUpdate(this.conns.size, [...this.names.values()]);
+        if (!this.started) this.broadcastPlayers();
         if (this.conns.size > 0) {
           this.broadcast({ t: "notice", message: `${name} left the room.` });
         }
@@ -80,6 +98,19 @@ export class RoomHost {
       }
     });
     conn.on("error", (err) => this.onError?.(err));
+  }
+
+  playerList() {
+    return [this.hostName, ...this.names.values()];
+  }
+
+  broadcastPlayers() {
+    this.broadcast({
+      t: "players",
+      players: this.playerList(),
+      count: this.conns.size + 1,
+      max: this.maxPlayers,
+    });
   }
 
   indexOf(conn) {
@@ -120,7 +151,17 @@ export class RoomHost {
 }
 
 export class RoomClient {
-  constructor({ code, name, onStarted, onMove, onNotice, onHostLeft, onError }) {
+  constructor({
+    code,
+    name,
+    onStarted,
+    onMove,
+    onNotice,
+    onHostLeft,
+    onError,
+    onJoined,
+    onPlayers,
+  }) {
     this.code = code;
     this.name = name;
     this.onStarted = onStarted;
@@ -128,6 +169,8 @@ export class RoomClient {
     this.onNotice = onNotice;
     this.onHostLeft = onHostLeft;
     this.onError = onError;
+    this.onJoined = onJoined;
+    this.onPlayers = onPlayers;
     this.closed = false;
     this.conn = null;
     this.peer = new PeerCtor();
@@ -149,7 +192,11 @@ export class RoomClient {
       if (data.t === "start") this.onStarted(data);
       else if (data.t === "move") this.onMove(data.r, data.c, data.dir);
       else if (data.t === "notice") this.onNotice?.(data.message);
-      else if (data.t === "full") {
+      else if (data.t === "joined") {
+        this.onJoined?.(data.you, data.players, data.max);
+      } else if (data.t === "players") {
+        this.onPlayers?.(data.players, data.max);
+      } else if (data.t === "full") {
         if (!this.closed) this.onError?.(new Error("Room is already in a game."));
       }
     });

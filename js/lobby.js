@@ -3,20 +3,49 @@ const BROKER_ID = "dots-and-boxes-lobby-v1";
 const PeerCtor = globalThis.Peer;
 
 export class Lobby {
-  constructor({ onRooms, onStatus, onError } = {}) {
+  constructor({
+    onRooms,
+    onStatus,
+    onError,
+    heartbeatMs = 3000,
+    staleMs = 9000,
+    sweepMs = 2000,
+    pingMs = 2000,
+    deadBrokerMs = 6000,
+    watchdogMs = 1000,
+    openTimeoutMs = 5000,
+    reconnectMs = 400,
+    errorRetryMs = 1200,
+    claimRetryMs = 3000,
+  } = {}) {
     this.onRooms = onRooms;
     this.onStatus = onStatus;
     this.onError = onError;
+    this.heartbeatMs = heartbeatMs;
+    this.staleMs = staleMs;
+    this.sweepMs = sweepMs;
+    this.pingMs = pingMs;
+    this.deadBrokerMs = deadBrokerMs;
+    this.watchdogMs = watchdogMs;
+    this.openTimeoutMs = openTimeoutMs;
+    this.reconnectMs = reconnectMs;
+    this.errorRetryMs = errorRetryMs;
+    this.claimRetryMs = claimRetryMs;
     this.peer = null;
     this.conn = null;
     this.rooms = new Map();
     this.knownRooms = new Map();
-    this.confTimers = new Map();
+    this.lastSeen = new Map();
     this.brokerConns = new Set();
     this.isBroker = false;
     this.myRoom = null;
     this.closed = false;
     this.retry = null;
+    this.heartbeatTimer = null;
+    this.sweepTimer = null;
+    this.watchdogTimer = null;
+    this.openTimer = null;
+    this.lastDataTs = 0;
   }
 
   start() {
@@ -31,26 +60,32 @@ export class Lobby {
     const peer = new PeerCtor(BROKER_ID);
     this.peer = peer;
     peer.on("open", () => {
-      if (this.closed) return;
+      if (this.closed || this.peer !== peer) return;
       this.isBroker = true;
       this.brokerConns.clear();
       this.rooms = new Map(this.knownRooms);
       this.knownRooms.clear();
-      if (this.myRoom) this.rooms.set(this.myRoom.code, this.myRoom);
+      this.lastSeen.clear();
+      const now = Date.now();
+      for (const code of this.rooms.keys()) this.lastSeen.set(code, now);
+      if (this.myRoom) {
+        this.rooms.set(this.myRoom.code, this.myRoom);
+        this.lastSeen.set(this.myRoom.code, now);
+      }
       this.onStatus?.("hosting");
-      this.armCleanup();
+      this.startSweep();
       this.broadcastRooms();
     });
     peer.on("connection", (conn) => this.handleBrokerConn(conn));
     peer.on("error", (err) => {
-      if (this.closed) return;
+      if (this.closed || this.peer !== peer) return;
       if (err.type === "unavailable-id") {
         this.isBroker = false;
         this.connectToBroker();
       } else {
         this.onError?.(err);
         this.onStatus?.("offline");
-        this.retry = setTimeout(() => this.becomeBroker(), 3000);
+        this.retry = setTimeout(() => this.becomeBroker(), this.claimRetryMs);
       }
     });
   }
@@ -61,34 +96,57 @@ export class Lobby {
     const peer = new PeerCtor();
     this.peer = peer;
     peer.on("open", () => {
+      if (this.closed || this.peer !== peer) return;
       const conn = peer.connect(BROKER_ID, { reliable: true });
+      if (!conn) {
+        this.onStatus?.("reconnecting");
+        this.retry = setTimeout(() => this.becomeBroker(), this.errorRetryMs);
+        return;
+      }
       this.conn = conn;
+      this.clearOpenTimer();
+      this.openTimer = setTimeout(() => {
+        this.openTimer = null;
+        if (this.closed || this.conn !== conn || conn.open) return;
+        this.onStatus?.("reconnecting");
+        this.retry = setTimeout(() => this.becomeBroker(), this.reconnectMs);
+      }, this.openTimeoutMs);
       conn.on("open", () => {
-        if (this.closed) return;
+        if (this.closed || this.conn !== conn) return;
+        this.clearOpenTimer();
         this.onStatus?.("connected");
         if (this.myRoom) conn.send({ t: "publish", room: this.myRoom });
         conn.send({ t: "list" });
+        this.startHeartbeat();
+        this.startWatchdog();
       });
       conn.on("data", (data) => {
+        this.lastDataTs = Date.now();
         if (data?.t === "rooms") {
           this.knownRooms = new Map(data.rooms.map((r) => [r.code, r]));
           this.onRooms?.(data.rooms);
         }
       });
       conn.on("close", () => {
-        if (this.closed) return;
+        if (this.closed || this.conn !== conn) return;
+        this.clearOpenTimer();
+        this.stopHeartbeat();
+        this.stopWatchdog();
         this.onStatus?.("reconnecting");
-        this.retry = setTimeout(() => this.becomeBroker(), 400);
+        this.retry = setTimeout(() => this.becomeBroker(), this.reconnectMs);
       });
       conn.on("error", () => {
-        if (this.closed) return;
-        this.retry = setTimeout(() => this.becomeBroker(), 1200);
+        if (this.closed || this.conn !== conn) return;
+        this.clearOpenTimer();
+        this.stopHeartbeat();
+        this.stopWatchdog();
+        this.retry = setTimeout(() => this.becomeBroker(), this.errorRetryMs);
       });
     });
     peer.on("error", () => {
-      if (this.closed) return;
+      if (this.closed || this.peer !== peer) return;
       this.onStatus?.("reconnecting");
-      this.retry = setTimeout(() => this.becomeBroker(), 1200);
+      this.retry = setTimeout(() => this.becomeBroker(), this.errorRetryMs);
     });
   }
 
@@ -99,10 +157,19 @@ export class Lobby {
       if (data.t === "publish" && data.room?.code) {
         conn.roomCode = data.room.code;
         this.rooms.set(data.room.code, data.room);
-        this.confirmRoom(data.room.code);
+        this.lastSeen.set(data.room.code, Date.now());
         this.broadcastRooms();
+      } else if (
+        data.t === "heartbeat" &&
+        data.code &&
+        conn.roomCode === data.code
+      ) {
+        this.lastSeen.set(data.code, Date.now());
       } else if (data.t === "unpublish" && data.code) {
-        if (conn.roomCode === data.code) this.rooms.delete(data.code);
+        if (conn.roomCode === data.code) {
+          this.rooms.delete(data.code);
+          this.lastSeen.delete(data.code);
+        }
         this.broadcastRooms();
       } else if (data.t === "list") {
         conn.send({ t: "rooms", rooms: [...this.rooms.values()] });
@@ -110,8 +177,10 @@ export class Lobby {
     });
     conn.on("close", () => {
       this.brokerConns.delete(conn);
+      if (this.closed) return;
       if (conn.roomCode && this.rooms.has(conn.roomCode)) {
         this.rooms.delete(conn.roomCode);
+        this.lastSeen.delete(conn.roomCode);
         this.broadcastRooms();
       }
     });
@@ -122,28 +191,7 @@ export class Lobby {
     this.knownRooms = new Map(this.rooms);
     this.onRooms?.(rooms);
     for (const conn of this.brokerConns) {
-      conn.send({ t: "rooms", rooms });
-    }
-  }
-
-  confirmRoom(code) {
-    const t = this.confTimers.get(code);
-    if (t) {
-      clearTimeout(t);
-      this.confTimers.delete(code);
-    }
-  }
-
-  armCleanup() {
-    for (const t of this.confTimers.values()) clearTimeout(t);
-    this.confTimers.clear();
-    for (const code of this.rooms.keys()) {
-      if (code === this.myRoom?.code) continue;
-      const t = setTimeout(() => {
-        this.confTimers.delete(code);
-        if (this.rooms.delete(code)) this.broadcastRooms();
-      }, 20000);
-      this.confTimers.set(code, t);
+      if (conn.open) conn.send({ t: "rooms", rooms });
     }
   }
 
@@ -151,7 +199,7 @@ export class Lobby {
     this.myRoom = room;
     if (this.isBroker) {
       this.rooms.set(room.code, room);
-      this.confirmRoom(room.code);
+      this.lastSeen.set(room.code, Date.now());
       this.broadcastRooms();
     } else if (this.conn?.open) {
       this.conn.send({ t: "publish", room });
@@ -165,6 +213,7 @@ export class Lobby {
     if (this.isBroker) {
       if (this.rooms.has(code)) {
         this.rooms.delete(code);
+        this.lastSeen.delete(code);
         this.broadcastRooms();
       }
     } else if (this.conn?.open) {
@@ -172,21 +221,95 @@ export class Lobby {
     }
   }
 
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.closed) return;
+      if (this.myRoom && this.conn?.open) {
+        this.conn.send({ t: "heartbeat", code: this.myRoom.code });
+      }
+    }, this.heartbeatMs);
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
+  }
+
+  startWatchdog() {
+    this.stopWatchdog();
+    this.lastDataTs = Date.now();
+    this.watchdogTimer = setInterval(() => {
+      if (this.closed || this.isBroker) return;
+      if (!this.conn?.open) return;
+      if (this.retry) return;
+      if (Date.now() - this.lastDataTs > this.deadBrokerMs) {
+        this.onStatus?.("reconnecting");
+        this.retry = setTimeout(() => this.becomeBroker(), this.reconnectMs);
+      }
+    }, this.watchdogMs);
+  }
+
+  stopWatchdog() {
+    if (this.watchdogTimer) clearInterval(this.watchdogTimer);
+    this.watchdogTimer = null;
+  }
+
+  clearOpenTimer() {
+    if (this.openTimer) clearTimeout(this.openTimer);
+    this.openTimer = null;
+  }
+
+  startSweep() {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    const sweep = () => {
+      if (this.closed || !this.isBroker) return;
+      if (this.myRoom) this.lastSeen.set(this.myRoom.code, Date.now());
+      for (const conn of this.brokerConns) {
+        if (conn.open) conn.send({ t: "ping" });
+      }
+      let removed = false;
+      const now = Date.now();
+      for (const code of this.rooms.keys()) {
+        if (code === this.myRoom?.code) continue;
+        const last = this.lastSeen.get(code) || 0;
+        if (now - last > this.staleMs) {
+          this.rooms.delete(code);
+          this.lastSeen.delete(code);
+          removed = true;
+        }
+      }
+      if (removed) this.broadcastRooms();
+    };
+    sweep();
+    this.sweepTimer = setInterval(sweep, this.sweepMs);
+  }
+
   clear() {
-    if (this.retry) clearTimeout(this.retry);
-    this.retry = null;
-    try {
-      this.conn?.close();
-    } catch {}
+    if (this.retry) {
+      clearTimeout(this.retry);
+      this.retry = null;
+    }
+    this.clearOpenTimer();
+    this.stopHeartbeat();
+    this.stopWatchdog();
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
+    }
+    this.lastSeen.clear();
+    const conn = this.conn;
     this.conn = null;
     try {
-      this.peer?.destroy();
+      conn?.close();
     } catch {}
+    const peer = this.peer;
     this.peer = null;
+    try {
+      peer?.destroy();
+    } catch {}
     this.isBroker = false;
     this.brokerConns.clear();
-    for (const t of this.confTimers.values()) clearTimeout(t);
-    this.confTimers.clear();
   }
 
   destroy() {

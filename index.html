@@ -36,6 +36,15 @@
 
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
+  <div class="overlay" id="joinWaitOverlay" hidden>
+    <div class="wait-card">
+      <h2>Waiting for players</h2>
+      <p class="wait-status" id="joinWaitStatus">Waiting for more players…</p>
+      <ul class="wait-players" id="joinWaitList"></ul>
+      <button class="btn-ghost" id="leaveJoinBtn" type="button">Leave Room</button>
+    </div>
+  </div>
+
   <div class="overlay" id="setupOverlay">
     <div class="setup-card">
       <h2>Dots <span class="amp">&amp;</span> Boxes</h2>
