@@ -112,6 +112,14 @@
       </div>
 
       <div class="mode-pane" id="pane-join" role="tabpanel" hidden>
+        <p class="lobby-status" id="lobbyStatus">Connecting to lobby…</p>
+        <div class="field">
+          <label>Available rooms</label>
+          <div id="roomList" class="room-list">
+            <p class="room-list-empty">No rooms available. Create one to get started.</p>
+          </div>
+        </div>
+        <p class="or-divider">or join with a code</p>
         <div class="field">
           <label for="joinCode">Room code</label>
           <input type="text" id="joinCode" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="6-digit code">

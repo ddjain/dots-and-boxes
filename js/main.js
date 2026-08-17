@@ -3,6 +3,7 @@ import { Board } from "./board.js";
 import { Game } from "./game.js";
 import { Renderer } from "./renderer.js";
 import { RoomHost, RoomClient, describeError } from "./network.js";
+import { Lobby } from "./lobby.js";
 import * as sound from "./sound.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -51,6 +52,8 @@ const els = {
   joinRoomBtn: $("#joinRoomBtn"),
   joinStatus: $("#joinStatus"),
   cancelJoinBtn: $("#cancelJoinBtn"),
+  lobbyStatus: $("#lobbyStatus"),
+  roomList: $("#roomList"),
 };
 
 let renderer = null;
@@ -59,6 +62,7 @@ let mode = "local";
 let myIndex = 0;
 let host = null;
 let client = null;
+let lobby = null;
 let joinedNames = [];
 
 function buildPlayerInputs() {
@@ -95,6 +99,7 @@ function setMode(m) {
 }
 
 function teardownNetwork() {
+  lobby?.unpublish();
   host?.destroy();
   host = null;
   client?.destroy();
@@ -320,6 +325,13 @@ function startHostRoom() {
     onReady: (code) => {
       els.roomCodeText.textContent = code;
       els.waitingText.textContent = `Waiting for players (1/${playerCount})`;
+      lobby?.publish({
+        code,
+        hostName: hostNameValue,
+        size,
+        players: 1,
+        maxPlayers: playerCount,
+      });
     },
     onLobbyUpdate: (count, names) => {
       joinedNames = names;
@@ -335,6 +347,13 @@ function startHostRoom() {
         els.lobbyList.appendChild(li);
       });
       els.waitingText.textContent = `Waiting for players (${count + 1}/${playerCount})`;
+      lobby?.publish({
+        code: els.roomCodeText.textContent,
+        hostName: hostNameValue,
+        size,
+        players: count + 1,
+        maxPlayers: playerCount,
+      });
       if (!game && count + 1 >= playerCount) {
         startHostGame(size, playerCount, hostNameValue);
       }
@@ -369,6 +388,7 @@ function startHostGame(size, playerCount, hostNameValue) {
     });
   }
   host.start(players, size);
+  lobby?.unpublish();
   startGame(size, players, 0, "host");
 }
 
@@ -421,6 +441,69 @@ function showNetError(err) {
     els.joinStatus.classList.add("error");
     els.joinRoomBtn.disabled = false;
   }
+}
+
+const LOBBY_STATUS_TEXT = {
+  connecting: "Connecting to lobby…",
+  hosting: "Hosting the lobby",
+  connected: "Lobby connected",
+  reconnecting: "Lobby reconnecting…",
+  offline: "Lobby unavailable",
+};
+
+function setLobbyStatus(status) {
+  els.lobbyStatus.textContent = LOBBY_STATUS_TEXT[status] || "";
+  els.lobbyStatus.className = `lobby-status ${status || ""}`;
+}
+
+function renderRoomList(rooms) {
+  els.roomList.innerHTML = "";
+  const list = Array.isArray(rooms) ? rooms : [];
+  if (list.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "room-list-empty";
+    empty.textContent = "No rooms available right now. Create one to get started.";
+    els.roomList.appendChild(empty);
+    return;
+  }
+  for (const room of list) {
+    const item = document.createElement("div");
+    item.className = "room-item";
+
+    const info = document.createElement("div");
+    info.className = "room-info";
+    const name = document.createElement("div");
+    name.className = "room-name";
+    name.textContent = room.hostName || "Host";
+    const meta = document.createElement("div");
+    meta.className = "room-meta";
+    meta.textContent = `#${room.code} · ${room.size} × ${room.size} · ${room.players}/${room.maxPlayers}`;
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const joinBtn = document.createElement("button");
+    joinBtn.type = "button";
+    joinBtn.className = "btn-join";
+    joinBtn.textContent = "Join";
+    joinBtn.addEventListener("click", () => {
+      els.joinCode.value = room.code;
+      joinRoom();
+    });
+
+    item.appendChild(info);
+    item.appendChild(joinBtn);
+    els.roomList.appendChild(item);
+  }
+}
+
+function initLobby() {
+  if (!window.Peer) return;
+  lobby = new Lobby({
+    onRooms: renderRoomList,
+    onStatus: setLobbyStatus,
+    onError: () => {},
+  });
+  lobby.start();
 }
 
 function showToast(message, variant = "info") {
@@ -499,6 +582,7 @@ els.startLocalBtn.addEventListener("click", startLocalGame);
 els.createRoomBtn.addEventListener("click", startHostRoom);
 els.copyLinkBtn.addEventListener("click", copyShareLink);
 els.cancelHostBtn.addEventListener("click", () => {
+  lobby?.unpublish();
   host?.destroy();
   host = null;
   joinedNames = [];
@@ -540,3 +624,4 @@ els.soundToggle.addEventListener("click", () => {
 
 buildPlayerInputs();
 parseRoomFromUrl();
+initLobby();

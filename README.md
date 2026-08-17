@@ -22,6 +22,8 @@ A turn-based multiplayer strategy game built with vanilla HTML, CSS, and JavaScr
   - Create Room with grid size and player-count settings
   - Live lobby showing who has joined
   - Copy a share link like `https://host/?type=join&code=123456` for one-click joining
+- **Room browser** — the Join tab lists all waiting rooms (name, grid, players, code) with one-click join; rooms appear/disappear automatically as hosts come and go
+- **Self-healing lobby** — a room registry on a shared peer ID; if the hosting client leaves, another client takes over and rooms re-publish automatically
 - **Live scoreboard** with the current player's turn highlighted
 - **Sound effects** — move, error, win, and player-left sounds with a mute toggle
 - **Player leave notifications** — everyone is notified when someone leaves the room
@@ -44,6 +46,7 @@ A turn-based multiplayer strategy game built with vanilla HTML, CSS, and JavaScr
     ├── game.js         # Turn rotation, extra-turn rule, win detection
     ├── renderer.js     # SVG board rendering and click handling
     ├── network.js      # PeerJS room host/client with move relaying
+    ├── lobby.js        # Self-healing room registry (broker election)
     ├── sound.js        # Web Audio sound effects
     └── main.js         # App wiring, UI, toasts
 ```

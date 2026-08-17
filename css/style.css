@@ -448,6 +448,122 @@ body {
   font-size: 14px;
 }
 
+.lobby-status {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lobby-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.lobby-status.connected::before {
+  background: #3ddc84;
+}
+
+.lobby-status.hosting::before {
+  background: var(--accent);
+}
+
+.lobby-status.reconnecting::before,
+.lobby-status.connecting::before {
+  background: #ffb020;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.lobby-status.offline::before {
+  background: #ff4d4d;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 224px;
+  overflow-y: auto;
+}
+
+.room-list-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 2px;
+}
+
+.room-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.room-item .room-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-item .room-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-item .room-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.btn-join {
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  background: var(--accent);
+  color: #10131f;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+
+.btn-join:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -6px var(--accent);
+}
+
+.or-divider {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 2px 0 14px;
+}
+
 .field-row {
   display: flex;
   gap: 12px;
