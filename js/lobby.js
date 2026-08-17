@@ -10,6 +10,8 @@ export class Lobby {
     this.peer = null;
     this.conn = null;
     this.rooms = new Map();
+    this.knownRooms = new Map();
+    this.confTimers = new Map();
     this.brokerConns = new Set();
     this.isBroker = false;
     this.myRoom = null;
@@ -32,8 +34,11 @@ export class Lobby {
       if (this.closed) return;
       this.isBroker = true;
       this.brokerConns.clear();
+      this.rooms = new Map(this.knownRooms);
+      this.knownRooms.clear();
       if (this.myRoom) this.rooms.set(this.myRoom.code, this.myRoom);
       this.onStatus?.("hosting");
+      this.armCleanup();
       this.broadcastRooms();
     });
     peer.on("connection", (conn) => this.handleBrokerConn(conn));
@@ -65,7 +70,10 @@ export class Lobby {
         conn.send({ t: "list" });
       });
       conn.on("data", (data) => {
-        if (data?.t === "rooms") this.onRooms?.(data.rooms);
+        if (data?.t === "rooms") {
+          this.knownRooms = new Map(data.rooms.map((r) => [r.code, r]));
+          this.onRooms?.(data.rooms);
+        }
       });
       conn.on("close", () => {
         if (this.closed) return;
@@ -91,6 +99,7 @@ export class Lobby {
       if (data.t === "publish" && data.room?.code) {
         conn.roomCode = data.room.code;
         this.rooms.set(data.room.code, data.room);
+        this.confirmRoom(data.room.code);
         this.broadcastRooms();
       } else if (data.t === "unpublish" && data.code) {
         if (conn.roomCode === data.code) this.rooms.delete(data.code);
@@ -110,9 +119,31 @@ export class Lobby {
 
   broadcastRooms() {
     const rooms = [...this.rooms.values()];
+    this.knownRooms = new Map(this.rooms);
     this.onRooms?.(rooms);
     for (const conn of this.brokerConns) {
       conn.send({ t: "rooms", rooms });
+    }
+  }
+
+  confirmRoom(code) {
+    const t = this.confTimers.get(code);
+    if (t) {
+      clearTimeout(t);
+      this.confTimers.delete(code);
+    }
+  }
+
+  armCleanup() {
+    for (const t of this.confTimers.values()) clearTimeout(t);
+    this.confTimers.clear();
+    for (const code of this.rooms.keys()) {
+      if (code === this.myRoom?.code) continue;
+      const t = setTimeout(() => {
+        this.confTimers.delete(code);
+        if (this.rooms.delete(code)) this.broadcastRooms();
+      }, 20000);
+      this.confTimers.set(code, t);
     }
   }
 
@@ -120,6 +151,7 @@ export class Lobby {
     this.myRoom = room;
     if (this.isBroker) {
       this.rooms.set(room.code, room);
+      this.confirmRoom(room.code);
       this.broadcastRooms();
     } else if (this.conn?.open) {
       this.conn.send({ t: "publish", room });
@@ -153,6 +185,8 @@ export class Lobby {
     this.peer = null;
     this.isBroker = false;
     this.brokerConns.clear();
+    for (const t of this.confTimers.values()) clearTimeout(t);
+    this.confTimers.clear();
   }
 
   destroy() {
