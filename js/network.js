@@ -90,8 +90,12 @@ export class RoomHost {
         this.conns.delete(index);
         this.names.delete(index);
         this.onLobbyUpdate(this.conns.size, [...this.names.values()]);
-        if (!this.started) this.broadcastPlayers();
-        if (this.conns.size > 0) {
+        if (!this.started) {
+          this.broadcastPlayers();
+        } else {
+          this.broadcast({ t: "playerLeft", index, name });
+        }
+        if (this.conns.size > 0 && !this.started) {
           this.broadcast({ t: "notice", message: `${name} left the room.` });
         }
         this.onDisconnect?.(index, name);
@@ -161,6 +165,7 @@ export class RoomClient {
     onError,
     onJoined,
     onPlayers,
+    onPlayerLeft,
   }) {
     this.code = code;
     this.name = name;
@@ -171,6 +176,7 @@ export class RoomClient {
     this.onError = onError;
     this.onJoined = onJoined;
     this.onPlayers = onPlayers;
+    this.onPlayerLeft = onPlayerLeft;
     this.closed = false;
     this.conn = null;
     this.peer = new PeerCtor();
@@ -196,6 +202,8 @@ export class RoomClient {
         this.onJoined?.(data.you, data.players, data.max);
       } else if (data.t === "players") {
         this.onPlayers?.(data.players, data.max);
+      } else if (data.t === "playerLeft") {
+        this.onPlayerLeft?.(data.index, data.name);
       } else if (data.t === "full") {
         if (!this.closed) this.onError?.(new Error("Room is already in a game."));
       }

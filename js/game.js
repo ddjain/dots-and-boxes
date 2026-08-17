@@ -2,6 +2,9 @@ export class Game {
   constructor(board, players) {
     this.board = board;
     this.players = players;
+    for (const player of this.players) {
+      if (player.active === undefined) player.active = true;
+    }
     this.currentIndex = 0;
     this.isOver = false;
     this.lastMove = null;
@@ -12,6 +15,33 @@ export class Game {
     return this.players[this.currentIndex];
   }
 
+  activeCount() {
+    return this.players.reduce((n, p) => n + (p.active ? 1 : 0), 0);
+  }
+
+  nextActiveIndex(from) {
+    const n = this.players.length;
+    let i = from;
+    for (let step = 0; step < n; step += 1) {
+      i = (i + 1) % n;
+      if (this.players[i].active) return i;
+    }
+    return from;
+  }
+
+  markPlayerLeft(index) {
+    const player = this.players[index];
+    if (!player || !player.active) return;
+    player.active = false;
+    if (!this.players[this.currentIndex].active) {
+      this.currentIndex = this.nextActiveIndex(this.currentIndex);
+    }
+    if (this.activeCount() < 2) {
+      this.isOver = true;
+      this.winnerIndexes = this.computeWinner();
+    }
+  }
+
   applyMove(r, c, dir) {
     if (this.isOver) return null;
     const completed = this.board.placeEdge(r, c, dir, this.currentIndex);
@@ -20,7 +50,7 @@ export class Game {
     }
     const gotExtraTurn = completed.length > 0;
     if (!gotExtraTurn) {
-      this.currentIndex = (this.currentIndex + 1) % this.players.length;
+      this.currentIndex = this.nextActiveIndex(this.currentIndex);
     }
     this.isOver = this.board.isGameOver();
     if (this.isOver) {
@@ -40,11 +70,11 @@ export class Game {
 
   computeWinner() {
     const scores = this.scores();
-    const max = Math.max(...scores);
-    const winners = [];
-    scores.forEach((score, i) => {
-      if (score === max) winners.push(i);
-    });
-    return winners;
+    const active = this.players
+      .map((player, i) => (player.active ? i : -1))
+      .filter((i) => i !== -1);
+    if (active.length === 0) return [];
+    const max = Math.max(...active.map((i) => scores[i]));
+    return active.filter((i) => scores[i] === max);
   }
 }

@@ -206,7 +206,30 @@ body {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
+
   text-overflow: ellipsis;
+}
+
+.score-you {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.score-item-offline {
+  opacity: 0.45;
+}
+
+.score-item-offline .swatch {
+  filter: grayscale(1);
+}
+
+.score-left {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .score-value {
@@ -398,6 +421,17 @@ body {
   letter-spacing: 0.1em;
 }
 
+.net-status .you-name {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.net-status .you-name strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .room-code {
   font-size: 44px;
   font-weight: 800;
@@ -410,6 +444,29 @@ body {
   text-align: center;
   font-variant-numeric: tabular-nums;
   user-select: all;
+}
+
+.qr-wrap {
+  margin: 14px auto 0;
+  width: fit-content;
+  padding: 10px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.qr-wrap img {
+  display: block;
+  width: 168px;
+  height: 168px;
+}
+
+.qr-wrap .qr-hint {
+  margin: 6px 0 2px;
+  font-size: 12px;
+  color: #333;
+  text-align: center;
+  letter-spacing: 0.06em;
 }
 
 .net-status .waiting {

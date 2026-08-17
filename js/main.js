@@ -41,8 +41,10 @@ const els = {
   hostName: $("#hostName"),
   createRoomBtn: $("#createRoomBtn"),
   hostStatus: $("#hostStatus"),
+  hostYouName: $("#hostYouName"),
   roomCodeText: $("#roomCodeText"),
   copyLinkBtn: $("#copyLinkBtn"),
+  qrCode: $("#qrCode"),
   waitingText: $("#waitingText"),
   lobbyList: $("#lobbyList"),
   cancelHostBtn: $("#cancelHostBtn"),
@@ -193,12 +195,22 @@ function applyMove(r, c, dir) {
   sound.playMove();
 }
 
+function handlePlayerLeft(index, name) {
+  if (!game || index < 0 || index >= game.players.length) return;
+  game.markPlayerLeft(index);
+  renderer.redraw();
+  updateUI();
+  sound.playLeave();
+  showToast(`${name} left. Their turns are skipped.`, "leave");
+}
+
 function renderScores() {
   const scores = game.scores();
   els.scoreList.innerHTML = "";
   game.players.forEach((player, i) => {
     const item = document.createElement("li");
-    item.className = "score-item";
+    item.className =
+      "score-item" + (player.active === false ? " score-item-offline" : "");
     item.style.borderColor =
       i === game.currentIndex && !game.isOver ? player.color : "transparent";
 
@@ -209,6 +221,18 @@ function renderScores() {
     const name = document.createElement("span");
     name.className = "score-name";
     name.textContent = player.name;
+    if (mode !== "local" && i === myIndex) {
+      const you = document.createElement("span");
+      you.className = "score-you";
+      you.textContent = " (you)";
+      name.appendChild(you);
+    }
+    if (player.active === false) {
+      const left = document.createElement("span");
+      left.className = "score-left";
+      left.textContent = " left";
+      name.appendChild(left);
+    }
 
     const value = document.createElement("span");
     value.className = "score-value";
@@ -319,7 +343,7 @@ function startHostRoom() {
   }
   const size = Number(els.gridSizeHost.value);
   const playerCount = Number(els.playerCountHost.value);
-  const hostNameValue = els.hostName.value.trim() || "Host";
+  const hostNameValue = els.hostName.value.trim() || generateName();
 
   els.hostStatus.hidden = false;
   els.waitingText.classList.remove("error");
@@ -328,8 +352,12 @@ function startHostRoom() {
   els.createRoomBtn.disabled = true;
 
   host = new RoomHost({
+    hostName: hostNameValue,
+    maxPlayers: playerCount,
     onReady: (code) => {
       els.roomCodeText.textContent = code;
+      els.hostYouName.textContent = hostNameValue;
+      renderQr(buildJoinLink(code));
       els.waitingText.textContent = `Waiting for players (1/${playerCount})`;
       lobby?.publish({
         code,
@@ -371,8 +399,12 @@ function startHostRoom() {
       applyMove(r, c, dir);
     },
     onDisconnect: (index, name) => {
-      sound.playLeave();
-      showToast(`${name} left the room.`, "leave");
+      if (mode === "host" && game) {
+        handlePlayerLeft(index, name);
+      } else {
+        sound.playLeave();
+        showToast(`${name} left the room.`, "leave");
+      }
     },
     onError: (err) => showNetError(err),
   });
@@ -446,7 +478,7 @@ function joinRoom() {
   if (!/^\d{6}$/.test(code)) {
     return showNetError(new Error("Enter the 6-digit room code."));
   }
-  const name = els.joinName.value.trim() || "Player";
+  const name = els.joinName.value.trim() || generateName();
 
   els.joinRoomBtn.disabled = true;
   els.joinStatus.hidden = false;
@@ -463,6 +495,7 @@ function joinRoom() {
     onJoined: (you, players, max) => showJoinWait(you, players, max),
     onPlayers: (players, max) => renderJoinWait(players, max),
     onMove: (r, c, dir) => applyMove(r, c, dir),
+    onPlayerLeft: (index, name) => handlePlayerLeft(index, name),
     onNotice: (message) => {
       sound.playLeave();
       showToast(message, "leave");
@@ -572,6 +605,33 @@ function buildJoinLink(code) {
   let base = window.location.href.split("#")[0].split("?")[0].replace(/\/+$/, "");
   if (base.endsWith("/index.html")) base = base.slice(0, -"index.html".length);
   return `${base}?type=join&code=${code}`;
+}
+
+const NAME_ADJECTIVES = [
+  "dark", "bright", "silent", "wild", "frozen", "golden", "shadow",
+  "mighty", "swift", "hidden", "crimson", "mystic", "lonely", "brave",
+  "cosmic", "electric", "ancient", "stormy", "clever", "phantom",
+];
+
+const NAME_NOUNS = [
+  "forest", "wolf", "tiger", "dragon", "falcon", "shadow", "hunter",
+  "warrior", "eagle", "fox", "bear", "lion", "snake", "raven",
+  "phoenix", "storm", "knight", "ghost", "panther", "viper",
+];
+
+function generateName() {
+  const adjective = NAME_ADJECTIVES[Math.floor(Math.random() * NAME_ADJECTIVES.length)];
+  const noun = NAME_NOUNS[Math.floor(Math.random() * NAME_NOUNS.length)];
+  return `${adjective}_${noun}`;
+}
+
+function renderQr(text) {
+  if (typeof qrcode !== "function") return;
+  const qr = qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  els.qrCode.src = qr.createDataURL(10, 4);
+  els.qrCode.hidden = false;
 }
 
 async function copyToClipboard(text) {
