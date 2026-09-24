@@ -3,11 +3,11 @@ export const CONFIG = {
   padding: 40,
   dotRadius: 5,
   lineWidth: 6,
-  boxFillOpacity: 0.45,
+  boxFillOpacity: 0.35,
   playerTemplates: [
-    { name: "Player A", color: "#ff4d6d", symbol: "A" },
-    { name: "Player B", color: "#4d9dff", symbol: "B" },
-    { name: "Player C", color: "#3ddc84", symbol: "C" },
-    { name: "Player D", color: "#ffb020", symbol: "D" },
+    { name: "Pig", color: "#ff4f7d", symbol: "🐷" },
+    { name: "Monkey", color: "#ff9505", symbol: "🐵" },
+    { name: "Snake", color: "#12b886", symbol: "🐍" },
+    { name: "Gorilla", color: "#7048e8", symbol: "🦍" },
   ],
 };

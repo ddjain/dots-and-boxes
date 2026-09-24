@@ -44,9 +44,10 @@ export class Game {
 
   applyMove(r, c, dir) {
     if (this.isOver) return null;
-    const completed = this.board.placeEdge(r, c, dir, this.currentIndex);
+    const owner = this.currentIndex;
+    const completed = this.board.placeEdge(r, c, dir, owner);
     for (const [br, bc] of completed) {
-      this.board.claimBox(br, bc, this.currentIndex);
+      this.board.claimBox(br, bc, owner);
     }
     const gotExtraTurn = completed.length > 0;
     if (!gotExtraTurn) {
@@ -56,7 +57,7 @@ export class Game {
     if (this.isOver) {
       this.winnerIndexes = this.computeWinner();
     }
-    this.lastMove = { r, c, dir, completed, gotExtraTurn };
+    this.lastMove = { r, c, dir, completed, gotExtraTurn, owner };
     return this.lastMove;
   }
 
