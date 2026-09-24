@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dots &amp; Boxes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B7%3C/text%3E%3C/svg%3E">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-LP9SCYP33N"></script>
 <script>
@@ -12,14 +13,23 @@
   gtag('js', new Date());
   gtag('config', 'G-LP9SCYP33N');
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <main class="app">
+  <div class="cast" aria-hidden="true">
+    <span class="cast-mate" style="--i:0">🐷</span>
+    <span class="cast-mate" style="--i:1">🐵</span>
+    <span class="cast-mate" style="--i:2">🐍</span>
+    <span class="cast-mate" style="--i:3">🦍</span>
+  </div>
   <header class="app-header">
     <div class="title-block">
       <h1>Dots <span class="amp">&amp;</span> Boxes</h1>
-      <p class="tagline">Draw smart. Complete boxes. Take extra turns. Win the game.</p>
+      <p class="tagline">Draw smart. Grab a box. Chain them. Steal the round.</p>
     </div>
     <button class="sound-toggle" id="soundToggle" type="button" aria-label="Toggle sound">🔊</button>
   </header>
@@ -29,7 +39,7 @@
     <aside class="sidebar">
       <div class="turn-card">
         <span class="turn-label">Current Turn</span>
-        <span class="turn-chip" id="turnChip"></span>
+        <span class="turn-chip" id="turnChip"><span class="turn-avatar" id="turnAvatar"></span><span id="turnName"></span></span>
         <span class="status" id="statusText"></span>
       </div>
       <div class="score-panel">
@@ -160,6 +170,7 @@
 
   <div class="overlay" id="resultOverlay" hidden>
     <div class="result-card">
+      <div class="result-emblem" id="resultEmblem" aria-hidden="true">🏆</div>
       <h2 id="resultTitle">Player wins!</h2>
       <ul id="resultDetails" class="result-list"></ul>
       <div class="result-actions">

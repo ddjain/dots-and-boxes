@@ -47,6 +47,10 @@ export function playWin() {
     tone({ freq, type: "triangle", duration: 0.26, gain: 0.22, when: i * 0.13 });
   });
 }
+export function playCapture() {
+  tone({ freq: 660, type: "sine", duration: 0.1, gain: 0.22 });
+  tone({ freq: 880, type: "sine", duration: 0.14, gain: 0.22, when: 0.08 });
+}
 
 export function playLeave() {
   tone({ freq: 420, type: "sine", duration: 0.16, gain: 0.2 });

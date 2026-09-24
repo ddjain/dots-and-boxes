@@ -16,11 +16,14 @@ const els = {
   gameTimer: $("#gameTimer"),
   scoreList: $("#scoreList"),
   turnChip: $("#turnChip"),
+  turnAvatar: $("#turnAvatar"),
+  turnName: $("#turnName"),
   statusText: $("#statusText"),
   newGameBtn: $("#newGameBtn"),
   toastContainer: $("#toastContainer"),
   soundToggle: $("#soundToggle"),
   resultTitle: $("#resultTitle"),
+  resultEmblem: $("#resultEmblem"),
   resultDetails: $("#resultDetails"),
   playAgainBtn: $("#playAgainBtn"),
   resultCloseBtn: $("#resultCloseBtn"),
@@ -73,17 +76,17 @@ let lobby = null;
 let joinedNames = [];
 let timerHandle = null;
 let timerStart = 0;
+let lastScores = [];
 
 function buildPlayerInputs() {
   const count = Number(els.playerCountLocal.value);
   els.playerNamesLocal.innerHTML = "";
   for (let i = 0; i < count; i++) {
     const row = document.createElement("div");
-    row.className = "player-name-row";
-
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background = CONFIG.playerTemplates[i].color;
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.style.background = CONFIG.playerTemplates[i].color + "26";
+    avatar.textContent = CONFIG.playerTemplates[i].symbol;
 
     const input = document.createElement("input");
     input.type = "text";
@@ -91,7 +94,7 @@ function buildPlayerInputs() {
     input.placeholder = CONFIG.playerTemplates[i].name;
     input.dataset.index = i;
 
-    row.appendChild(swatch);
+    row.appendChild(avatar);
     row.appendChild(input);
     els.playerNamesLocal.appendChild(row);
   }
@@ -147,6 +150,7 @@ function startGame(size, players, myIdx, netMode) {
   els.joinWaitOverlay.hidden = true;
   els.resultOverlay.hidden = true;
   els.gameLayout.hidden = false;
+  lastScores = new Array(players.length).fill(0);
   updateUI();
 }
 
@@ -213,17 +217,21 @@ function onEdgeClick(r, c, dir) {
     client.sendMove(r, c, dir);
   }
 }
-
-function applyMove(r, c, dir) {
+function applyMove(r, c, dir, animate = true) {
   if (!game || game.isOver) return;
   if (game.board.isDrawn(r, c, dir)) {
     sound.playError();
     return;
   }
   game.applyMove(r, c, dir);
-  renderer.redraw();
-  updateUI(game.lastMove);
-  sound.playMove();
+  const move = game.lastMove;
+  renderer.drawLine(r, c, dir, move.owner, animate);
+  move.completed.forEach(([br, bc], k) => {
+    renderer.captureBox(br, bc, move.owner, animate ? 140 + k * 90 : 0, animate);
+  });
+  updateUI(move);
+  if (move.completed.length > 0) sound.playCapture();
+  else sound.playMove();
 }
 
 function handlePlayerLeft(index, name) {
@@ -243,12 +251,15 @@ function renderScores() {
     const item = document.createElement("li");
     item.className =
       "score-item" + (player.active === false ? " score-item-offline" : "");
-    item.style.borderColor =
-      i === game.currentIndex && !game.isOver ? player.color : "transparent";
+    if (i === game.currentIndex && !game.isOver) {
+      item.classList.add("score-item-turn");
+      item.style.setProperty("--turn-color", player.color);
+    }
 
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background = player.color;
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.style.background = player.color + "26";
+    avatar.textContent = player.symbol;
 
     const name = document.createElement("span");
     name.className = "score-name";
@@ -270,12 +281,16 @@ function renderScores() {
     value.className = "score-value";
     value.style.color = player.color;
     value.textContent = scores[i];
+    if (lastScores[i] !== undefined && lastScores[i] < scores[i]) {
+      value.classList.add("score-pop");
+    }
 
-    item.appendChild(swatch);
+    item.appendChild(avatar);
     item.appendChild(name);
     item.appendChild(value);
     els.scoreList.appendChild(item);
   });
+  lastScores = scores;
 }
 
 function updateUI(lastMove) {
@@ -286,18 +301,21 @@ function updateUI(lastMove) {
 
   if (game.isOver) {
     stopTimer();
-    els.turnChip.textContent = "Game Over";
-    els.turnChip.style.color = "var(--muted)";
-    els.turnChip.style.borderColor = "var(--border)";
+    els.turnAvatar.textContent = "🏁";
+    els.turnName.textContent = "Game Over";
+    els.turnChip.classList.add("turn-chip-over");
     els.statusText.textContent = "";
     showResults();
     return;
   }
 
   const player = game.currentPlayer;
-  els.turnChip.textContent = player.name;
+  els.turnChip.classList.remove("turn-chip-over");
+  els.turnAvatar.textContent = player.symbol;
+  els.turnName.textContent = player.name;
   els.turnChip.style.color = player.color;
   els.turnChip.style.borderColor = player.color;
+  els.turnChip.style.setProperty("--turn-color", player.color);
 
   const boxWord = (n) => `${n} box${n === 1 ? "" : "es"}`;
 
@@ -342,8 +360,10 @@ function showResults() {
     player_count: game.players.length,
   });
   if (winners.length === 1) {
+    els.resultEmblem.textContent = game.players[winners[0]].symbol;
     els.resultTitle.textContent = `🏆 ${game.players[winners[0]].name} wins!`;
   } else {
+    els.resultEmblem.textContent = "🤝";
     const names = winners.map((i) => game.players[i].name).join(", ");
     els.resultTitle.textContent = `🏆 It's a tie between ${names}!`;
   }
@@ -353,9 +373,10 @@ function showResults() {
     const row = document.createElement("li");
     row.className = "result-row";
 
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background = player.color;
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.style.background = player.color + "26";
+    avatar.textContent = player.symbol;
 
     const name = document.createElement("span");
     name.textContent = player.name;
@@ -364,13 +385,52 @@ function showResults() {
     scoreEl.className = "result-score";
     scoreEl.textContent = `${score} box${score === 1 ? "" : "es"}`;
 
-    row.appendChild(swatch);
+    row.appendChild(avatar);
     row.appendChild(name);
     row.appendChild(scoreEl);
     els.resultDetails.appendChild(row);
   });
 
   els.resultOverlay.hidden = false;
+  if (winners.length === 1) {
+    launchConfetti(game.players[winners[0]].color, game.players[winners[0]].symbol);
+  }
+}
+
+function launchConfetti(color, emoji) {
+  const palette = [
+    color,
+    ...CONFIG.playerTemplates.map((p) => p.color),
+    "#ffd43b",
+    "#4dd4ac",
+  ];
+  const container = document.createElement("div");
+  container.className = "confetti";
+  document.body.appendChild(container);
+  const pieces = [];
+  for (let i = 0; i < 60; i += 1) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    if (i % 7 === 0) {
+      piece.textContent = emoji;
+      piece.classList.add("confetti-emoji");
+    } else {
+      piece.style.background = palette[i % palette.length];
+      if (i % 3 === 0) piece.style.borderRadius = "50%";
+    }
+    const drift = (Math.random() - 0.5) * 160;
+    const fall = 3.4 + Math.random() * 2.6;
+    const size = 8 + Math.random() * 8;
+    piece.style.left = `${Math.random() * 100}vw`;
+    piece.style.width = `${size}px`;
+    piece.style.height = `${i % 7 === 0 ? "auto" : size * 1.4}px`;
+    piece.style.setProperty("--drift", `${drift}px`);
+    piece.style.animationDuration = `${fall}s`;
+    piece.style.animationDelay = `${Math.random() * 0.8}s`;
+    container.appendChild(piece);
+    pieces.push(piece);
+  }
+  setTimeout(() => container.remove(), 7000);
 }
 
 function startHostRoom() {
@@ -412,10 +472,11 @@ function startHostRoom() {
       names.forEach((name, i) => {
         const li = document.createElement("li");
         li.className = "lobby-item";
-        const swatch = document.createElement("span");
-        swatch.className = "swatch";
-        swatch.style.background = CONFIG.playerTemplates[i + 1].color;
-        li.appendChild(swatch);
+        const avatar = document.createElement("span");
+        avatar.className = "avatar";
+        avatar.style.background = CONFIG.playerTemplates[i + 1].color + "26";
+        avatar.textContent = CONFIG.playerTemplates[i + 1].symbol;
+        li.appendChild(avatar);
         li.appendChild(document.createTextNode(name));
         els.lobbyList.appendChild(li);
       });
@@ -482,11 +543,12 @@ function renderJoinWait(players, max) {
   list.forEach((name, i) => {
     const li = document.createElement("li");
     li.className = "wait-player";
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background =
-      CONFIG.playerTemplates[i % CONFIG.playerTemplates.length].color;
-    li.appendChild(swatch);
+    const avatar = document.createElement("span");
+    avatar.className = "avatar";
+    avatar.style.background =
+      CONFIG.playerTemplates[i % CONFIG.playerTemplates.length].color + "26";
+    avatar.textContent = CONFIG.playerTemplates[i % CONFIG.playerTemplates.length].symbol;
+    li.appendChild(avatar);
 
     const label = document.createElement("span");
     label.textContent = name;

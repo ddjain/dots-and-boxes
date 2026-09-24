@@ -1,5 +1,14 @@
 import { CONFIG } from "./config.js";
 
+const NS = "http://www.w3.org/2000/svg";
+
+function el(name, attrs = {}, parent = null) {
+  const node = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
 export class Renderer {
   constructor(svg, board, players) {
     this.svg = svg;
@@ -19,16 +28,48 @@ export class Renderer {
     this.svg.setAttribute("height", this.height);
     this.svg.innerHTML = "";
 
-    const ns = "http://www.w3.org/2000/svg";
-    const defs = document.createElementNS(ns, "defs");
-    const style = document.createElementNS(ns, "style");
-    style.textContent = `.edge-slot:hover .edge-preview{stroke:var(--player-color, var(--accent));opacity:0.5}`;
-    defs.appendChild(style);
-    this.svg.appendChild(defs);
+    const defs = el("defs", {}, this.svg);
 
-    this.gBoard = document.createElementNS(ns, "g");
-    this.svg.appendChild(this.gBoard);
-    this.drawBoxes();
+    // Graph-paper grid, one faint square per box.
+    const pattern = el("pattern", {
+      id: "paperGrid",
+      width: cellSize,
+      height: cellSize,
+      patternUnits: "userSpaceOnUse",
+      x: padding,
+      y: padding,
+    }, defs);
+    el("path", {
+      d: `M ${cellSize} 0 H 0 V ${cellSize}`,
+      fill: "none",
+      stroke: "rgba(31, 41, 82, 0.09)",
+      "stroke-width": 1,
+    }, pattern);
+
+    const soft = el("radialGradient", { id: "paperGlow", cx: "50%", cy: "0%", r: "90%" }, defs);
+    el("stop", { offset: "0%", "stop-color": "rgba(255,255,255,0.55)" }, soft);
+    el("stop", { offset: "100%", "stop-color": "rgba(255,255,255,0)" }, soft);
+
+    this.gBoard = el("g", {}, this.svg);
+    el("rect", { class: "board-bg", x: 0, y: 0, width: this.width, height: this.height }, this.gBoard);
+    el("rect", { class: "board-glow", x: 0, y: 0, width: this.width, height: this.height, fill: "url(#paperGlow)" }, this.gBoard);
+    el("rect", {
+      class: "board-grid",
+      x: padding,
+      y: padding,
+      width: cols * cellSize,
+      height: rows * cellSize,
+      fill: "url(#paperGrid)",
+    }, this.gBoard);
+    el("rect", {
+      class: "board-frame",
+      x: padding - 14,
+      y: padding - 14,
+      width: cols * cellSize + 28,
+      height: rows * cellSize + 28,
+      rx: 14,
+    }, this.gBoard);
+
     this.drawEdges();
     this.drawDots();
   }
@@ -40,20 +81,10 @@ export class Renderer {
     };
   }
 
-  drawBoxes() {
-    const ns = "http://www.w3.org/2000/svg";
-    for (let r = 0; r < this.board.rows; r++) {
-      for (let c = 0; c < this.board.cols; c++) {
-        const rect = document.createElementNS(ns, "rect");
-        const p = this.pt(r, c);
-        rect.setAttribute("x", p.x);
-        rect.setAttribute("y", p.y);
-        rect.setAttribute("width", CONFIG.cellSize);
-        rect.setAttribute("height", CONFIG.cellSize);
-        rect.setAttribute("class", "box-empty");
-        this.gBoard.appendChild(rect);
-      }
-    }
+  edgeCoords(r, c, dir) {
+    const a = this.pt(r, c);
+    const b = dir === "h" ? this.pt(r, c + 1) : this.pt(r + 1, c);
+    return { a, b };
   }
 
   drawEdges() {
@@ -67,73 +98,38 @@ export class Renderer {
   }
 
   drawEdge(r, c, dir) {
-    const ns = "http://www.w3.org/2000/svg";
-    const owner = this.board.edgeOwner(r, c, dir);
-    if (owner !== undefined) {
-      const line = document.createElementNS(ns, "line");
-      if (dir === "h") {
-        const a = this.pt(r, c);
-        const b = this.pt(r, c + 1);
-        line.setAttribute("x1", a.x);
-        line.setAttribute("y1", a.y);
-        line.setAttribute("x2", b.x);
-        line.setAttribute("y2", b.y);
-      } else {
-        const a = this.pt(r, c);
-        const b = this.pt(r + 1, c);
-        line.setAttribute("x1", a.x);
-        line.setAttribute("y1", a.y);
-        line.setAttribute("x2", b.x);
-        line.setAttribute("y2", b.y);
-      }
-      line.setAttribute("stroke", this.players[owner].color);
-      line.setAttribute("stroke-width", CONFIG.lineWidth);
-      line.setAttribute("class", "edge-drawn");
-      this.gBoard.appendChild(line);
-      return;
-    }
-
-    const slot = document.createElementNS(ns, "g");
-    slot.setAttribute("class", "edge-slot");
+    if (this.board.isDrawn(r, c, dir)) return;
+    const slot = el("g", { class: "edge-slot" });
     slot.dataset.r = r;
     slot.dataset.c = c;
     slot.dataset.dir = dir;
 
-    const hitbox = document.createElementNS(ns, "rect");
+    const { a, b } = this.edgeCoords(r, c, dir);
+    const pad = CONFIG.lineWidth;
     if (dir === "h") {
-      const a = this.pt(r, c);
-      hitbox.setAttribute("x", a.x - CONFIG.lineWidth);
-      hitbox.setAttribute("y", a.y - CONFIG.lineWidth);
-      hitbox.setAttribute("width", CONFIG.cellSize + CONFIG.lineWidth * 2);
-      hitbox.setAttribute("height", CONFIG.lineWidth * 2);
+      el("rect", {
+        x: a.x - pad,
+        y: a.y - pad,
+        width: CONFIG.cellSize + pad * 2,
+        height: pad * 2,
+      }, slot);
     } else {
-      const a = this.pt(r, c);
-      hitbox.setAttribute("x", a.x - CONFIG.lineWidth);
-      hitbox.setAttribute("y", a.y - CONFIG.lineWidth);
-      hitbox.setAttribute("width", CONFIG.lineWidth * 2);
-      hitbox.setAttribute("height", CONFIG.cellSize + CONFIG.lineWidth * 2);
+      el("rect", {
+        x: a.x - pad,
+        y: a.y - pad,
+        width: pad * 2,
+        height: CONFIG.cellSize + pad * 2,
+      }, slot);
     }
-    slot.appendChild(hitbox);
 
-    const preview = document.createElementNS(ns, "line");
-    preview.setAttribute("class", "edge-preview");
-    if (dir === "h") {
-      const a = this.pt(r, c);
-      const b = this.pt(r, c + 1);
-      preview.setAttribute("x1", a.x);
-      preview.setAttribute("y1", a.y);
-      preview.setAttribute("x2", b.x);
-      preview.setAttribute("y2", b.y);
-    } else {
-      const a = this.pt(r, c);
-      const b = this.pt(r + 1, c);
-      preview.setAttribute("x1", a.x);
-      preview.setAttribute("y1", a.y);
-      preview.setAttribute("x2", b.x);
-      preview.setAttribute("y2", b.y);
-    }
-    preview.setAttribute("stroke-width", CONFIG.lineWidth);
-    slot.appendChild(preview);
+    const preview = el("line", {
+      class: "edge-preview",
+      x1: a.x,
+      y1: a.y,
+      x2: b.x,
+      y2: b.y,
+      "stroke-width": CONFIG.lineWidth,
+    }, slot);
 
     slot.addEventListener("click", () => {
       if (this.onEdgeClick) this.onEdgeClick(r, c, dir);
@@ -143,59 +139,104 @@ export class Renderer {
   }
 
   drawDots() {
-    const ns = "http://www.w3.org/2000/svg";
-    for (let r = 0; r < this.board.rows + 1; r++) {
-      for (let c = 0; c < this.board.cols + 1; c++) {
-        const circle = document.createElementNS(ns, "circle");
+    const { rows, cols } = this.board;
+    for (let r = 0; r < rows + 1; r++) {
+      for (let c = 0; c < cols + 1; c++) {
         const p = this.pt(r, c);
-        circle.setAttribute("cx", p.x);
-        circle.setAttribute("cy", p.y);
-        circle.setAttribute("r", CONFIG.dotRadius);
-        circle.setAttribute("class", "dot");
-        this.gBoard.appendChild(circle);
+        el("circle", { class: "dot", cx: p.x, cy: p.y, r: CONFIG.dotRadius }, this.gBoard);
       }
     }
   }
 
   setPlayerColor(index) {
     const color =
-      index === null || index === undefined
-        ? "#565d82"
-        : this.players[index].color;
+      index === null || index === undefined ? "#565d82" : this.players[index].color;
     this.svg.style.setProperty("--player-color", color);
   }
+  drawLine(r, c, dir, owner, animate) {
+    const slotSel = `.edge-slot[data-r="${r}"][data-c="${c}"][data-dir="${dir}"]`;
+    this.svg.querySelector(slotSel)?.remove();
+    const { a, b } = this.edgeCoords(r, c, dir);
+    const line = el("line", {
+      class: "edge-drawn",
+      x1: a.x,
+      y1: a.y,
+      x2: b.x,
+      y2: b.y,
+      stroke: this.players[owner].color,
+      "stroke-width": CONFIG.lineWidth,
+    }, this.gBoard);
+    if (animate) {
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      line.style.strokeDasharray = `${length}`;
+      line.style.strokeDashoffset = `${length}`;
+      requestAnimationFrame(() => {
+        line.style.transition = "stroke-dashoffset 150ms ease-out";
+        line.style.strokeDashoffset = "0";
+        setTimeout(() => {
+          line.style.transition = "";
+          line.style.strokeDasharray = "";
+          line.style.strokeDashoffset = "";
+        }, 220);
+      });
+    }
+    return line;
+  }
 
-  refreshBoxes() {
-    const ns = "http://www.w3.org/2000/svg";
+  // Rebuild everything, then re-apply static content for the current state.
+  redraw() {
+    this.build();
+    for (let r = 0; r < this.board.rows; r++) {
+      for (let c = 0; c < this.board.cols + 1; c++) {
+        const owner = this.board.edgeOwner(r, c, "v");
+        if (owner !== undefined) this.drawLine(r, c, "v", owner, false);
+      }
+    }
+    for (let r = 0; r < this.board.rows + 1; r++) {
+      for (let c = 0; c < this.board.cols; c++) {
+        const owner = this.board.edgeOwner(r, c, "h");
+        if (owner !== undefined) this.drawLine(r, c, "h", owner, false);
+      }
+    }
     for (let r = 0; r < this.board.rows; r++) {
       for (let c = 0; c < this.board.cols; c++) {
         const owner = this.board.boxOwner(r, c);
-        if (owner === undefined) continue;
-        const p = this.pt(r, c);
-        const rect = document.createElementNS(ns, "rect");
-        rect.setAttribute("x", p.x);
-        rect.setAttribute("y", p.y);
-        rect.setAttribute("width", CONFIG.cellSize);
-        rect.setAttribute("height", CONFIG.cellSize);
-        rect.setAttribute("fill", this.players[owner].color);
-        rect.setAttribute("fill-opacity", CONFIG.boxFillOpacity);
-        rect.setAttribute("class", "box-claimed");
-        this.gBoard.appendChild(rect);
-
-        const text = document.createElementNS(ns, "text");
-        text.setAttribute("x", p.x + CONFIG.cellSize / 2);
-        text.setAttribute("y", p.y + CONFIG.cellSize / 2);
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("dominant-baseline", "central");
-        text.setAttribute("fill", this.players[owner].color);
-        text.textContent = this.players[owner].symbol;
-        this.gBoard.appendChild(text);
+        if (owner !== undefined) this.captureBox(r, c, owner, 0, false);
       }
     }
   }
 
-  redraw() {
-    this.build();
-    this.refreshBoxes();
+  captureBox(r, c, owner, delay = 0, animate = true) {
+    const { p } = this.boxGeom(r, c);
+    const player = this.players[owner];
+    const { cellSize } = CONFIG;
+    const g = el("g", { class: "box-claimed" + (animate ? " box-pop" : "") }, this.gBoard);
+    if (animate) g.style.animationDelay = `${delay}ms`;
+    el("rect", {
+      x: p.x,
+      y: p.y,
+      width: cellSize,
+      height: cellSize,
+      rx: 6,
+      fill: player.color,
+      "fill-opacity": CONFIG.boxFillOpacity,
+      stroke: player.color,
+      "stroke-opacity": 0.55,
+      "stroke-width": 2,
+    }, g);
+    const text = el("text", {
+      class: "box-emoji",
+      x: p.x + cellSize / 2,
+      y: p.y + cellSize / 2,
+      "text-anchor": "middle",
+      "dominant-baseline": "central",
+    }, g);
+    text.textContent = player.symbol;
+    return g;
+  }
+
+  boxGeom(r, c) {
+    const p = this.pt(r, c);
+    return { p };
   }
 }
